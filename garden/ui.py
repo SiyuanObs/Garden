@@ -3,64 +3,62 @@ import tkinter as tk
 from garden.models import GameState
 
 
+STATE_LABELS = {
+    "empty": "空",
+    "planted": "🌱",
+    "ready": "🌹",
+}
+
+
 class GardenUI:
     def __init__(self, root: tk.Tk, state: GameState) -> None:
         self.root = root
         self.state = state
+        self.buttons: list[list[tk.Button]] = []
 
         root.title("Garden MVP")
         root.resizable(False, False)
 
-        self.status_label = tk.Label(root, text="", justify="left", anchor="w")
-        self.status_label.pack(fill="x", padx=24, pady=(20, 10))
+        self.info_label = tk.Label(root, text="", justify="left", anchor="w")
+        self.info_label.pack(fill="x", padx=20, pady=(16, 8))
 
-        button_frame = tk.Frame(root)
-        button_frame.pack(padx=24, pady=(0, 20))
+        grid_frame = tk.Frame(root)
+        grid_frame.pack(padx=20, pady=(0, 10))
 
-        plant_button = tk.Button(
-            button_frame, text="Plant Red Rose / 种下红玫瑰", command=self.on_plant
-        )
-        plant_button.pack(fill="x")
-
-        water_button = tk.Button(button_frame, text="Water / 浇水", command=self.on_water)
-        water_button.pack(fill="x", pady=(6, 0))
-
-        harvest_button = tk.Button(
-            button_frame, text="Harvest / 收获", command=self.on_harvest
-        )
-        harvest_button.pack(fill="x", pady=(6, 0))
+        for row in range(3):
+            button_row: list[tk.Button] = []
+            for col in range(3):
+                btn = tk.Button(
+                    grid_frame,
+                    text="",
+                    width=6,
+                    height=3,
+                    command=lambda r=row, c=col: self.on_click_plot(r, c),
+                )
+                btn.grid(row=row, column=col, padx=6, pady=6)
+                button_row.append(btn)
+            self.buttons.append(button_row)
 
         self.refresh()
-
-    def format_inventory(self) -> str:
-        if not self.state.inventory:
-            return "Empty"
-        count = self.state.inventory.get("红玫瑰", 0)
-        return f"红玫瑰 × {count}"
 
     def refresh(self) -> None:
-        plot_state = self.state.plot.state
-        crop_name = self.state.plot.crop.name if self.state.plot.crop else "None"
-        inventory = self.format_inventory()
-        message = self.state.message
-        text = (
-            f"Plot state: {plot_state}\n"
-            f"Current crop: {crop_name}\n"
-            f"Inventory: {inventory}\n"
-            f"Message: {message}"
+        for row in range(3):
+            for col in range(3):
+                plot = self.state.plots[row][col]
+                label = STATE_LABELS.get(plot.state, plot.state)
+                self.buttons[row][col].config(text=label)
+
+        roses = self.state.inventory.get("红玫瑰", 0)
+        self.info_label.config(
+            text=(
+                f"Water: {self.state.water}    "
+                f"Inventory: 红玫瑰 × {roses}\n"
+                f"Message: {self.state.message}"
+            )
         )
-        self.status_label.config(text=text)
 
-    def on_plant(self) -> None:
-        self.state.plant_rose()
-        self.refresh()
-
-    def on_water(self) -> None:
-        self.state.water()
-        self.refresh()
-
-    def on_harvest(self) -> None:
-        self.state.harvest()
+    def on_click_plot(self, row: int, col: int) -> None:
+        self.state.click_plot(row, col)
         self.refresh()
 
 
