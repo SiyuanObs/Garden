@@ -41,6 +41,7 @@ class GardenUI:
         self.font_small = self._load_font(16, bold=False)
         self.font_bold = self._load_font(20, bold=True)
         self.font_tiny = self._load_font(14, bold=False)
+        self.chest_icon = self._load_chest_icon()
 
         self.grid_size = 3
         self.PADDING = 24
@@ -102,6 +103,13 @@ class GardenUI:
         ]
         font = pygame.font.SysFont(candidates, size, bold=bold)
         return font
+
+    def _load_chest_icon(self) -> Optional[pygame.Surface]:
+        try:
+            icon = pygame.image.load("assets/chest.png").convert_alpha()
+        except (pygame.error, FileNotFoundError):
+            return None
+        return pygame.transform.smoothscale(icon, (32, 32))
 
     def handle_click(self, pos: Tuple[int, int]) -> None:
         if self.active_modal == "plant_menu":
@@ -189,22 +197,7 @@ class GardenUI:
             for col in range(self.grid_size):
                 rect = self.get_plot_rect(row, col)
                 plot = self.state.plots[row][col]
-                base_color = self.tile_color
-                border_color = self.tile_border
-                if self.is_chest_plot(row, col):
-                    base_color = (245, 226, 175)
-                    border_color = (184, 142, 63)
-                pygame.draw.rect(self.screen, base_color, rect, border_radius=8)
-                pygame.draw.rect(self.screen, border_color, rect, width=2, border_radius=8)
-                label = self.get_plot_label(plot, row, col)
-                self.draw_wrapped_text(
-                    self.screen,
-                    label,
-                    pygame.Rect(rect.x + 6, rect.y + 6, rect.width - 12, rect.height - 12),
-                    self.font_tiny,
-                    16,
-                    self.accent_color,
-                )
+                self.draw_plot(plot, row, col, rect)
 
         pygame.draw.rect(self.screen, self.panel_color, self.message_rect, border_radius=6)
         self.draw_message_lines(self.state.message)
@@ -338,8 +331,10 @@ class GardenUI:
     def get_plot_label(self, plot, row: int, col: int) -> str:
         if not plot.unlocked:
             cost = plot.unlock_cost
+            if not self.state.is_adjacent_to_unlocked(row, col):
+                return "LOCKED"
             if self.is_chest_plot(row, col):
-                return f"LOCKED {cost} CHEST"
+                return f"LOCKED {cost}"
             return f"LOCKED {cost}"
         if plot.state == "empty":
             label = "EMPTY"
@@ -351,7 +346,7 @@ class GardenUI:
         else:
             label = plot.state
         if self.is_chest_plot(row, col):
-            return f"CHEST - {label}"
+            return label
         return label
 
     def draw_xp_bar(self) -> None:
@@ -526,8 +521,62 @@ class GardenUI:
             surface.blit(font.render(line, True, color), (rect.x, rect.y + idx * line_height))
         return rect.y + max_lines * line_height
 
+    def draw_plot(self, plot, row: int, col: int, rect: pygame.Rect) -> None:
+        is_chest = self.is_chest_plot(row, col)
+        is_unlocked = plot.unlocked
+        is_adjacent = self.state.is_adjacent_to_unlocked(row, col)
+
+        # Visual tiers
+        if is_unlocked:
+            base_color = (247, 245, 241)
+            border_color = (140, 129, 116)
+            text_color = (96, 82, 69)
+        elif is_adjacent:
+            base_color = (214, 208, 200)
+            border_color = (150, 140, 130)
+            text_color = (120, 112, 104)
+        else:
+            base_color = (190, 188, 184)
+            border_color = (150, 150, 150)
+            text_color = (120, 120, 120)
+
+        if is_chest:
+            if is_unlocked:
+                base_color = (245, 226, 175)
+                border_color = (184, 142, 63)
+                text_color = (120, 92, 40)
+            else:
+                base_color = (210, 206, 196) if is_adjacent else (186, 186, 186)
+                border_color = (184, 142, 63)
+                text_color = (120, 92, 40)
+
+        pygame.draw.rect(self.screen, base_color, rect, border_radius=8)
+        pygame.draw.rect(self.screen, border_color, rect, width=2, border_radius=8)
+
+        if is_chest:
+            self.draw_chest_icon(rect)
+
+        label = self.get_plot_label(plot, row, col)
+        self.draw_wrapped_text(
+            self.screen,
+            label,
+            pygame.Rect(rect.x + 6, rect.y + 6, rect.width - 12, rect.height - 12),
+            self.font_tiny,
+            16,
+            text_color,
+        )
+
     def is_chest_plot(self, row: int, col: int) -> bool:
         return row == 2 and col == 2
+
+    def draw_chest_icon(self, rect: pygame.Rect) -> None:
+        if self.chest_icon is not None:
+            icon_rect = self.chest_icon.get_rect(center=rect.center)
+            self.screen.blit(self.chest_icon, icon_rect)
+        else:
+            text = self.font_small.render("CHEST", True, self.accent_color)
+            text_rect = text.get_rect(center=rect.center)
+            self.screen.blit(text, text_rect)
 
     def handle_order_click(self, pos: Tuple[int, int]) -> bool:
         if not self.order_buttons:
