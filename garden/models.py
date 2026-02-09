@@ -4,8 +4,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
+FLOWER_TYPES: dict[str, str] = {
+    "red_rose": "Red Rose",
+    "white_lily": "White Lily",
+    "eucalyptus": "Eucalyptus",
+}
+
+
 @dataclass(frozen=True)
 class CropType:
+    key: str
     name: str
 
 
@@ -23,6 +31,7 @@ class GameState:
     )
     message: str = "Ready"
     water: int = 20
+    active_flower: str = "red_rose"
 
     def _set_message(self, text: str) -> None:
         self.message = text
@@ -31,8 +40,9 @@ class GameState:
         plot = self.plots[row][col]
         if plot.state == "empty":
             plot.state = "planted"
-            plot.crop = CropType(name="红玫瑰")
-            self._set_message("种下红玫瑰")
+            name = FLOWER_TYPES.get(self.active_flower, "Red Rose")
+            plot.crop = CropType(key=self.active_flower, name=name)
+            self._set_message(f"种下 {name}")
             return
         if plot.state == "planted":
             if self.water <= 0:
@@ -40,10 +50,14 @@ class GameState:
                 return
             self.water -= 1
             plot.state = "ready"
-            self._set_message("浇水完成，红玫瑰可收获")
+            if plot.crop:
+                self._set_message(f"浇水完成，{plot.crop.name} 可收获")
+            else:
+                self._set_message("浇水完成，可收获")
             return
         if plot.state == "ready":
-            self.inventory["红玫瑰"] = self.inventory.get("红玫瑰", 0) + 1
+            if plot.crop:
+                self.inventory[plot.crop.key] = self.inventory.get(plot.crop.key, 0) + 1
             plot.state = "empty"
             plot.crop = None
-            self._set_message("收获红玫瑰")
+            self._set_message("收获完成")
