@@ -48,7 +48,7 @@ class GameState:
     coins: int = 0
     orders: list["Order"] = field(default_factory=list)
     order_timer: float = 10.0
-    max_orders: int = 5
+    max_orders: int = 3
     order_interval: float = 10.0
 
     def __post_init__(self) -> None:

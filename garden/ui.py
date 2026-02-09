@@ -40,6 +40,7 @@ class GardenUI:
         self.font = self._load_font(20, bold=False)
         self.font_small = self._load_font(16, bold=False)
         self.font_bold = self._load_font(20, bold=True)
+        self.font_tiny = self._load_font(14, bold=False)
 
         self.grid_size = 3
         self.PADDING = 24
@@ -48,7 +49,7 @@ class GardenUI:
         self.BOTTOM_H = 44
         self.XP_BAR_W = 320
         self.XP_BAR_H = 16
-        self.SIDE_W = 200
+        self.SIDE_W = 160
 
         self.tile_size = 120
         self.grid_gap = self.GAP
@@ -380,10 +381,10 @@ class GardenUI:
         self.screen.blit(timer, (self.side_rect.x + 12, self.side_rect.y + 34))
 
         self.order_buttons = []
-        y = self.side_rect.y + 60
+        y = self.side_rect.y + 58
         for idx, order in enumerate(self.state.orders[: self.state.max_orders]):
             card_rect = pygame.Rect(
-                self.side_rect.x + 10, y, self.side_rect.width - 20, 102
+                self.side_rect.x + 10, y, self.side_rect.width - 20, 130
             )
             pygame.draw.rect(self.screen, self.tile_color, card_rect, border_radius=6)
             pygame.draw.rect(self.screen, self.tile_border, card_rect, width=1, border_radius=6)
@@ -391,20 +392,19 @@ class GardenUI:
             title = self.font_small.render(f"Order {idx + 1}", True, self.text_color)
             self.screen.blit(title, (card_rect.x + 8, card_rect.y + 6))
 
-            lines = self.format_order_lines(order)
-            for li, (line, ok) in enumerate(lines):
-                color = self.text_color if ok else (150, 80, 80)
-                text = self.font_small.render(line, True, color)
-                self.screen.blit(text, (card_rect.x + 8, card_rect.y + 24 + li * 16))
+            requirements_rect = pygame.Rect(
+                card_rect.x + 8, card_rect.y + 26, card_rect.width - 16, 54
+            )
+            self.draw_order_requirements(order, requirements_rect)
 
-            reward_text = self.font_small.render(
+            reward_text = self.font_tiny.render(
                 f"Reward: {order.reward} coins", True, self.text_color
             )
-            self.screen.blit(reward_text, (card_rect.x + 8, card_rect.y + 72))
+            self.screen.blit(reward_text, (card_rect.x + 8, card_rect.y + 84))
 
             deliver_rect = pygame.Rect(
                 card_rect.right - 86,
-                card_rect.bottom - 26,
+                card_rect.bottom - 28,
                 76,
                 22,
             )
@@ -412,11 +412,12 @@ class GardenUI:
             fill = self.panel_color if can_deliver else (205, 198, 190)
             pygame.draw.rect(self.screen, fill, deliver_rect, border_radius=4)
             pygame.draw.rect(self.screen, self.tile_border, deliver_rect, width=1, border_radius=4)
-            label = self.font_small.render("Deliver", True, self.text_color)
-            self.screen.blit(label, (deliver_rect.x + 10, deliver_rect.y + 3))
+            label = self.font_tiny.render("Deliver", True, self.text_color)
+            label_rect = label.get_rect(center=deliver_rect.center)
+            self.screen.blit(label, label_rect)
             self.order_buttons.append(deliver_rect)
 
-            y += 110
+            y += 140
 
     def format_order_lines(self, order: Order) -> list[tuple[str, bool]]:
         parts: list[tuple[str, bool]] = []
@@ -426,6 +427,73 @@ class GardenUI:
             ok = owned >= qty
             parts.append((f"{name} x{qty} (owned {owned})", ok))
         return parts
+
+    def draw_order_requirements(self, order: Order, rect: pygame.Rect) -> None:
+        lines = self.format_order_lines(order)
+        y = rect.y
+        line_height = 16
+        for text, ok in lines:
+            color = self.text_color if ok else (150, 80, 80)
+            y = self.draw_wrapped_text(
+                self.screen,
+                text,
+                pygame.Rect(rect.x, y, rect.width, rect.bottom - y),
+                self.font_tiny,
+                line_height,
+                color,
+            )
+            if y + line_height > rect.bottom:
+                break
+
+    def draw_wrapped_text(
+        self,
+        surface: pygame.Surface,
+        text: str,
+        rect: pygame.Rect,
+        font: pygame.font.Font,
+        line_height: int,
+        color: tuple[int, int, int],
+    ) -> int:
+        if rect.height <= 0:
+            return rect.y
+        words = text.split(" ")
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            candidate = word if not current else f"{current} {word}"
+            if font.size(candidate)[0] <= rect.width:
+                current = candidate
+            else:
+                if current:
+                    lines.append(current)
+                if font.size(word)[0] <= rect.width:
+                    current = word
+                else:
+                    chunk = ""
+                    for ch in word:
+                        test = f"{chunk}{ch}"
+                        if font.size(test)[0] <= rect.width:
+                            chunk = test
+                        else:
+                            if chunk:
+                                lines.append(chunk)
+                            chunk = ch
+                    current = chunk
+        if current:
+            lines.append(current)
+
+        max_lines = max(1, rect.height // line_height)
+        truncated = len(lines) > max_lines
+        for idx, line in enumerate(lines[:max_lines]):
+            if truncated and idx == max_lines - 1:
+                if font.size(line + "...")[0] <= rect.width:
+                    line = f"{line}..."
+                else:
+                    while line and font.size(line + "...")[0] > rect.width:
+                        line = line[:-1]
+                    line = f"{line}..."
+            surface.blit(font.render(line, True, color), (rect.x, rect.y + idx * line_height))
+        return rect.y + max_lines * line_height
 
     def handle_order_click(self, pos: Tuple[int, int]) -> bool:
         if not self.order_buttons:
