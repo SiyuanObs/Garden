@@ -10,6 +10,12 @@ FLOWER_TYPES: dict[str, str] = {
     "eucalyptus": "Eucalyptus",
 }
 
+FLOWER_LABELS: dict[str, str] = {
+    "red_rose": "Red Rose / 红玫瑰",
+    "white_lily": "White Lily / 白百合",
+    "eucalyptus": "Eucalyptus / 尤加利叶",
+}
+
 
 @dataclass(frozen=True)
 class CropType:
@@ -31,33 +37,37 @@ class GameState:
     )
     message: str = "Ready"
     water: int = 20
-    active_flower: str = "red_rose"
 
     def _set_message(self, text: str) -> None:
         self.message = text
 
+    def plant_flower(self, row: int, col: int, flower_key: str) -> None:
+        plot = self.plots[row][col]
+        if plot.state != "empty":
+            return
+        name = FLOWER_TYPES.get(flower_key, "Red Rose")
+        plot.state = "planted"
+        plot.crop = CropType(key=flower_key, name=name)
+        self._set_message(f"Planted {name}")
+
     def click_plot(self, row: int, col: int) -> None:
         plot = self.plots[row][col]
         if plot.state == "empty":
-            plot.state = "planted"
-            name = FLOWER_TYPES.get(self.active_flower, "Red Rose")
-            plot.crop = CropType(key=self.active_flower, name=name)
-            self._set_message(f"种下 {name}")
             return
         if plot.state == "planted":
             if self.water <= 0:
-                self._set_message("水不足")
+                self._set_message("Not enough water")
                 return
             self.water -= 1
             plot.state = "ready"
             if plot.crop:
-                self._set_message(f"浇水完成，{plot.crop.name} 可收获")
+                self._set_message(f"Watered. {plot.crop.name} is ready")
             else:
-                self._set_message("浇水完成，可收获")
+                self._set_message("Watered. Ready to harvest")
             return
         if plot.state == "ready":
             if plot.crop:
                 self.inventory[plot.crop.key] = self.inventory.get(plot.crop.key, 0) + 1
             plot.state = "empty"
             plot.crop = None
-            self._set_message("收获完成")
+            self._set_message("Harvested")

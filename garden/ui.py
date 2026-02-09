@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 
 import pygame
 
-from garden.models import FLOWER_TYPES, GameState
+from garden.models import FLOWER_LABELS, FLOWER_TYPES, GameState
 
 
 STATE_LABELS = {
@@ -12,10 +12,10 @@ STATE_LABELS = {
     "ready": "READY",
 }
 
-FLOWER_LABELS = {
-    "red_rose": "Red Rose (红玫瑰)",
-    "white_lily": "White Lily (白百合)",
-    "eucalyptus": "Eucalyptus (尤加利叶)",
+MENU_LABELS = {
+    "red_rose": "红玫瑰 (Red Rose)",
+    "white_lily": "白百合 (White Lily)",
+    "eucalyptus": "尤加利叶 (Eucalyptus)",
 }
 
 
@@ -44,12 +44,22 @@ class GardenUI:
         self.grid_size = 3
         self.tile_size = 120
         self.grid_gap = 16
-        self.grid_top = 140
+        self.grid_top = 90
         self.grid_left = (self.width - (self.tile_size * self.grid_size + self.grid_gap * 2)) // 2
 
         self.inventory_rect = pygame.Rect(self.width - 140, 22, 110, 32)
         self.message_rect = pygame.Rect(24, self.height - 60, self.width - 48, 36)
-        self.flower_buttons = self._build_flower_buttons()
+        self.active_modal: Optional[str] = None
+        self.menu_rect = pygame.Rect(140, 160, 240, 220)
+        self.menu_buttons = self._build_menu_buttons()
+        self.pending_plot: Optional[Tuple[int, int]] = None
+        self.inventory_rect_modal = pygame.Rect(140, 160, 240, 200)
+        self.inventory_close_rect = pygame.Rect(
+            self.inventory_rect_modal.x + 60,
+            self.inventory_rect_modal.y + 140,
+            self.inventory_rect_modal.width - 120,
+            32,
+        )
 
     def run(self) -> None:
         running = True
@@ -80,20 +90,32 @@ class GardenUI:
         return font
 
     def handle_click(self, pos: Tuple[int, int]) -> None:
-        if self.inventory_rect.collidepoint(pos):
-            self.show_inventory()
-            return
-
-        for key, rect in self.flower_buttons.items():
-            if rect.collidepoint(pos):
-                self.state.active_flower = key
-                self.state.message = f"选中花种：{FLOWER_TYPES.get(key, key)}"
+        if self.active_modal == "plant_menu":
+            if self.handle_menu_click(pos):
                 return
+            self.active_modal = None
+            self.pending_plot = None
+            self.state.message = "Cancelled"
+            return
+        if self.active_modal == "inventory":
+            if self.handle_inventory_click(pos):
+                return
+            self.active_modal = None
+            return
+        if self.inventory_rect.collidepoint(pos):
+            self.pending_plot = None
+            self.active_modal = "inventory"
+            return
 
         row_col = self.get_plot_at_pos(pos)
         if row_col is None:
             return
         row, col = row_col
+        plot = self.state.plots[row][col]
+        if plot.state == "empty":
+            self.active_modal = "plant_menu"
+            self.pending_plot = (row, col)
+            return
         self.state.click_plot(row, col)
 
     def get_plot_at_pos(self, pos: Tuple[int, int]) -> Optional[Tuple[int, int]]:
@@ -111,12 +133,7 @@ class GardenUI:
         return pygame.Rect(x, y, self.tile_size, self.tile_size)
 
     def show_inventory(self) -> None:
-        red = self.state.inventory.get("red_rose", 0)
-        lily = self.state.inventory.get("white_lily", 0)
-        eucalyptus = self.state.inventory.get("eucalyptus", 0)
-        self.state.message = (
-            f"Red Rose: {red}  White Lily: {lily}  Eucalyptus: {eucalyptus}"
-        )
+        self.active_modal = "inventory"
 
     def draw(self) -> None:
         self.screen.fill(self.bg_color)
@@ -129,48 +146,147 @@ class GardenUI:
         inv_text_rect = inv_text.get_rect(center=self.inventory_rect.center)
         self.screen.blit(inv_text, inv_text_rect)
 
-        self.draw_flower_buttons()
-
         for row in range(self.grid_size):
             for col in range(self.grid_size):
                 rect = self.get_plot_rect(row, col)
                 pygame.draw.rect(self.screen, self.tile_color, rect, border_radius=8)
                 pygame.draw.rect(self.screen, self.tile_border, rect, width=2, border_radius=8)
                 plot = self.state.plots[row][col]
-                label = STATE_LABELS.get(plot.state, plot.state)
-                crop_name = plot.crop.name if plot.crop else "-"
-                label_text = self.font.render(f"{label}: {crop_name}", True, self.accent_color)
+                label = self.get_plot_label(plot)
+                label_text = self.font.render(label, True, self.accent_color)
                 label_rect = label_text.get_rect(center=rect.center)
                 self.screen.blit(label_text, label_rect)
 
         pygame.draw.rect(self.screen, self.panel_color, self.message_rect, border_radius=6)
-        message_text = self.font_small.render(self.state.message, True, self.text_color)
-        self.screen.blit(message_text, (self.message_rect.x + 10, self.message_rect.y + 9))
+        self.draw_message_lines(self.state.message)
 
-    def _build_flower_buttons(self) -> dict[str, pygame.Rect]:
+        if self.active_modal == "plant_menu":
+            self.draw_menu()
+        if self.active_modal == "inventory":
+            self.draw_inventory_modal()
+
+    def _build_menu_buttons(self) -> dict[str, pygame.Rect]:
         buttons: dict[str, pygame.Rect] = {}
-        start_x = 24
-        start_y = 70
-        width = 150
-        height = 30
-        gap = 10
-        order = ["red_rose", "white_lily", "eucalyptus"]
+        start_x = self.menu_rect.x + 20
+        start_y = self.menu_rect.y + 50
+        width = self.menu_rect.width - 40
+        height = 32
+        gap = 12
+        order = ["red_rose", "white_lily", "eucalyptus", "cancel"]
         for idx, key in enumerate(order):
-            x = start_x + idx * (width + gap)
-            buttons[key] = pygame.Rect(x, start_y, width, height)
+            y = start_y + idx * (height + gap)
+            buttons[key] = pygame.Rect(start_x, y, width, height)
         return buttons
 
-    def draw_flower_buttons(self) -> None:
-        for key, rect in self.flower_buttons.items():
-            is_active = self.state.active_flower == key
-            fill = (210, 201, 191) if is_active else self.panel_color
-            border = (92, 77, 64) if is_active else self.tile_border
-            pygame.draw.rect(self.screen, fill, rect, border_radius=6)
-            pygame.draw.rect(self.screen, border, rect, width=2, border_radius=6)
-            label = FLOWER_LABELS.get(key, key)
+    def handle_menu_click(self, pos: Tuple[int, int]) -> bool:
+        if not self.menu_rect.collidepoint(pos):
+            return False
+        for key, rect in self.menu_buttons.items():
+            if rect.collidepoint(pos):
+                if key == "cancel":
+                    self.active_modal = None
+                    self.pending_plot = None
+                    self.state.message = "Cancelled"
+                    return True
+                if self.pending_plot:
+                    row, col = self.pending_plot
+                    self.state.plant_flower(row, col, key)
+                self.active_modal = None
+                self.pending_plot = None
+                return True
+        return True
+
+    def draw_menu(self) -> None:
+        overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 80))
+        self.screen.blit(overlay, (0, 0))
+
+        pygame.draw.rect(self.screen, self.panel_color, self.menu_rect, border_radius=8)
+        pygame.draw.rect(self.screen, self.tile_border, self.menu_rect, width=2, border_radius=8)
+
+        title = self.font_bold.render("Choose a flower", True, self.text_color)
+        title_rect = title.get_rect(center=(self.menu_rect.centerx, self.menu_rect.y + 24))
+        self.screen.blit(title, title_rect)
+
+        for key, rect in self.menu_buttons.items():
+            pygame.draw.rect(self.screen, self.tile_color, rect, border_radius=6)
+            pygame.draw.rect(self.screen, self.tile_border, rect, width=2, border_radius=6)
+            if key == "cancel":
+                label = "Cancel"
+            else:
+                label = MENU_LABELS.get(key, key)
             text = self.font_small.render(label, True, self.text_color)
             text_rect = text.get_rect(center=rect.center)
             self.screen.blit(text, text_rect)
+
+    def handle_inventory_click(self, pos: Tuple[int, int]) -> bool:
+        if not self.inventory_rect_modal.collidepoint(pos):
+            return False
+        if self.inventory_close_rect.collidepoint(pos):
+            self.active_modal = None
+            return True
+        return True
+
+    def draw_inventory_modal(self) -> None:
+        overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 80))
+        self.screen.blit(overlay, (0, 0))
+
+        pygame.draw.rect(
+            self.screen, self.panel_color, self.inventory_rect_modal, border_radius=8
+        )
+        pygame.draw.rect(
+            self.screen, self.tile_border, self.inventory_rect_modal, width=2, border_radius=8
+        )
+
+        title = self.font_bold.render("Inventory", True, self.text_color)
+        title_rect = title.get_rect(
+            center=(self.inventory_rect_modal.centerx, self.inventory_rect_modal.y + 24)
+        )
+        self.screen.blit(title, title_rect)
+
+        red = self.state.inventory.get("red_rose", 0)
+        lily = self.state.inventory.get("white_lily", 0)
+        eucalyptus = self.state.inventory.get("eucalyptus", 0)
+
+        lines = [
+            f"Red Rose: {red}",
+            f"White Lily: {lily}",
+            f"Eucalyptus: {eucalyptus}",
+        ]
+        start_y = self.inventory_rect_modal.y + 60
+        for idx, line in enumerate(lines):
+            text = self.font_small.render(line, True, self.text_color)
+            self.screen.blit(
+                text, (self.inventory_rect_modal.x + 20, start_y + idx * 20)
+            )
+
+        pygame.draw.rect(
+            self.screen, self.tile_color, self.inventory_close_rect, border_radius=6
+        )
+        pygame.draw.rect(
+            self.screen, self.tile_border, self.inventory_close_rect, width=2, border_radius=6
+        )
+        close_text = self.font_small.render("Close", True, self.text_color)
+        close_rect = close_text.get_rect(center=self.inventory_close_rect.center)
+        self.screen.blit(close_text, close_rect)
+
+    def draw_message_lines(self, message: str) -> None:
+        lines = message.splitlines() if message else [""]
+        start_y = self.message_rect.y + 6
+        for idx, line in enumerate(lines[:3]):
+            text = self.font_small.render(line, True, self.text_color)
+            self.screen.blit(text, (self.message_rect.x + 10, start_y + idx * 14))
+
+    def get_plot_label(self, plot) -> str:
+        if plot.state == "empty":
+            return "EMPTY"
+        if plot.state == "planted":
+            name = plot.crop.name if plot.crop else "-"
+            return f"PLANTED - {name}"
+        if plot.state == "ready":
+            return plot.crop.name if plot.crop else "READY"
+        return plot.state
 
 
 def run_app(state: GameState) -> None:
