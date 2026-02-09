@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 
 import pygame
 
-from garden.models import GameState
+from garden.models import FLOWER_TYPES, GameState, Order
 
 
 STATE_LABELS = {
@@ -25,7 +25,7 @@ class GardenUI:
         pygame.init()
         pygame.display.set_caption("Garden MVP")
 
-        self.width = 640
+        self.width = 720
         self.height = 680
         self.screen = pygame.display.set_mode((self.width, self.height))
         self.clock = pygame.time.Clock()
@@ -48,6 +48,7 @@ class GardenUI:
         self.BOTTOM_H = 44
         self.XP_BAR_W = 320
         self.XP_BAR_H = 16
+        self.SIDE_W = 200
 
         self.tile_size = 120
         self.grid_gap = self.GAP
@@ -58,6 +59,8 @@ class GardenUI:
         self.message_rect = pygame.Rect(0, 0, 0, 0)
         self.xp_bar_rect = pygame.Rect(0, 0, self.XP_BAR_W, self.XP_BAR_H)
         self.content_rect = pygame.Rect(0, 0, 0, 0)
+        self.side_rect = pygame.Rect(0, 0, 0, 0)
+        self.grid_rect = pygame.Rect(0, 0, 0, 0)
         self.active_modal: Optional[str] = None
         self.menu_rect = pygame.Rect(0, 0, 260, 220)
         self.menu_entries: list[tuple[str, bool, str]] = []
@@ -65,12 +68,15 @@ class GardenUI:
         self.pending_plot: Optional[Tuple[int, int]] = None
         self.inventory_rect_modal = pygame.Rect(0, 0, 260, 200)
         self.inventory_close_rect = pygame.Rect(0, 0, 0, 0)
+        self.order_buttons: list[pygame.Rect] = []
 
         self.layout()
 
     def run(self) -> None:
         running = True
         while running:
+            dt = self.clock.tick(60) / 1000.0
+            self.state.update_orders(dt)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -79,7 +85,6 @@ class GardenUI:
 
             self.draw()
             pygame.display.flip()
-            self.clock.tick(60)
 
         pygame.quit()
 
@@ -113,6 +118,9 @@ class GardenUI:
             self.pending_plot = None
             self.active_modal = "inventory"
             return
+        if self.side_rect.collidepoint(pos):
+            if self.handle_order_click(pos):
+                return
 
         row_col = self.get_plot_at_pos(pos)
         if row_col is None:
@@ -149,6 +157,8 @@ class GardenUI:
 
         water_text = self.font_bold.render(f"water: {self.state.water}", True, self.text_color)
         self.screen.blit(water_text, (self.PADDING, self.PADDING + 10))
+        coins_text = self.font.render(f"coins: {self.state.coins}", True, self.text_color)
+        self.screen.blit(coins_text, (self.PADDING + 140, self.PADDING + 12))
 
         pygame.draw.rect(self.screen, self.panel_color, self.inventory_rect, border_radius=6)
         inv_text = self.font.render("Inventory", True, self.text_color)
@@ -159,6 +169,8 @@ class GardenUI:
         level_rect = level_text.get_rect(center=(self.width // 2, self.PADDING + 14))
         self.screen.blit(level_text, level_rect)
         self.draw_xp_bar()
+
+        self.draw_orders_panel()
 
         for row in range(self.grid_size):
             for col in range(self.grid_size):
@@ -353,9 +365,98 @@ class GardenUI:
         entries.append(("cancel", True, "Cancel"))
         return entries
 
+    def draw_orders_panel(self) -> None:
+        pygame.draw.rect(self.screen, self.panel_color, self.side_rect, border_radius=8)
+        pygame.draw.rect(self.screen, self.tile_border, self.side_rect, width=2, border_radius=8)
+
+        title = self.font_bold.render("Orders", True, self.text_color)
+        self.screen.blit(title, (self.side_rect.x + 12, self.side_rect.y + 10))
+
+        if len(self.state.orders) >= self.state.max_orders:
+            timer_text = "Next order: Full"
+        else:
+            timer_text = f"Next order in: {max(0, int(self.state.order_timer))}s"
+        timer = self.font_small.render(timer_text, True, self.text_color)
+        self.screen.blit(timer, (self.side_rect.x + 12, self.side_rect.y + 34))
+
+        self.order_buttons = []
+        y = self.side_rect.y + 60
+        for idx, order in enumerate(self.state.orders[: self.state.max_orders]):
+            card_rect = pygame.Rect(
+                self.side_rect.x + 10, y, self.side_rect.width - 20, 102
+            )
+            pygame.draw.rect(self.screen, self.tile_color, card_rect, border_radius=6)
+            pygame.draw.rect(self.screen, self.tile_border, card_rect, width=1, border_radius=6)
+
+            title = self.font_small.render(f"Order {idx + 1}", True, self.text_color)
+            self.screen.blit(title, (card_rect.x + 8, card_rect.y + 6))
+
+            lines = self.format_order_lines(order)
+            for li, (line, ok) in enumerate(lines):
+                color = self.text_color if ok else (150, 80, 80)
+                text = self.font_small.render(line, True, color)
+                self.screen.blit(text, (card_rect.x + 8, card_rect.y + 24 + li * 16))
+
+            reward_text = self.font_small.render(
+                f"Reward: {order.reward} coins", True, self.text_color
+            )
+            self.screen.blit(reward_text, (card_rect.x + 8, card_rect.y + 72))
+
+            deliver_rect = pygame.Rect(
+                card_rect.right - 86,
+                card_rect.bottom - 26,
+                76,
+                22,
+            )
+            can_deliver = self.state.can_fulfill(order)
+            fill = self.panel_color if can_deliver else (205, 198, 190)
+            pygame.draw.rect(self.screen, fill, deliver_rect, border_radius=4)
+            pygame.draw.rect(self.screen, self.tile_border, deliver_rect, width=1, border_radius=4)
+            label = self.font_small.render("Deliver", True, self.text_color)
+            self.screen.blit(label, (deliver_rect.x + 10, deliver_rect.y + 3))
+            self.order_buttons.append(deliver_rect)
+
+            y += 110
+
+    def format_order_lines(self, order: Order) -> list[tuple[str, bool]]:
+        parts: list[tuple[str, bool]] = []
+        for key, qty in order.requirements.items():
+            name = FLOWER_TYPES.get(key, key)
+            owned = self.state.inventory.get(key, 0)
+            ok = owned >= qty
+            parts.append((f"{name} x{qty} (owned {owned})", ok))
+        return parts
+
+    def handle_order_click(self, pos: Tuple[int, int]) -> bool:
+        if not self.order_buttons:
+            return False
+        for idx, rect in enumerate(self.order_buttons):
+            if rect.collidepoint(pos):
+                if idx < len(self.state.orders) and self.state.can_fulfill(
+                    self.state.orders[idx]
+                ):
+                    self.state.deliver_order(idx)
+                else:
+                    self.state.message = "Not enough flowers"
+                return True
+        return False
+
     def layout(self) -> None:
         self.content_rect = pygame.Rect(
             0, self.TOP_H, self.width, self.height - self.TOP_H - self.BOTTOM_H
+        )
+
+        self.side_rect = pygame.Rect(
+            self.PADDING,
+            self.content_rect.y + self.PADDING,
+            self.SIDE_W,
+            self.content_rect.height - self.PADDING * 2,
+        )
+        self.grid_rect = pygame.Rect(
+            self.side_rect.right + self.GAP,
+            self.content_rect.y + self.PADDING,
+            self.width - self.PADDING - (self.side_rect.right + self.GAP),
+            self.content_rect.height - self.PADDING * 2,
         )
 
         self.message_rect = pygame.Rect(
@@ -382,14 +483,14 @@ class GardenUI:
         avail_w = self.content_rect.width - self.PADDING * 2
         avail_h = self.content_rect.height - self.PADDING * 2
         total_gap = self.grid_gap * (self.grid_size - 1)
-        size_by_w = (avail_w - total_gap) // self.grid_size
-        size_by_h = (avail_h - total_gap) // self.grid_size
+        size_by_w = (self.grid_rect.width - total_gap) // self.grid_size
+        size_by_h = (self.grid_rect.height - total_gap) // self.grid_size
         self.tile_size = max(60, min(size_by_w, size_by_h))
 
         grid_w = self.tile_size * self.grid_size + total_gap
         grid_h = self.tile_size * self.grid_size + total_gap
-        self.grid_left = self.content_rect.x + (self.content_rect.width - grid_w) // 2
-        self.grid_top = self.content_rect.y + (self.content_rect.height - grid_h) // 2
+        self.grid_left = self.grid_rect.x + (self.grid_rect.width - grid_w) // 2
+        self.grid_top = self.grid_rect.y + (self.grid_rect.height - grid_h) // 2
 
         self.menu_rect = pygame.Rect(
             self.width // 2 - 130,
