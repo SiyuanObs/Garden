@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 
 import pygame
 
-from garden.models import FLOWER_TYPES, GameState
+from garden.models import GameState
 
 
 STATE_LABELS = {
@@ -60,7 +60,8 @@ class GardenUI:
         self.content_rect = pygame.Rect(0, 0, 0, 0)
         self.active_modal: Optional[str] = None
         self.menu_rect = pygame.Rect(0, 0, 260, 220)
-        self.menu_buttons = self._build_menu_buttons()
+        self.menu_entries: list[tuple[str, bool, str]] = []
+        self.menu_buttons: dict[str, pygame.Rect] = {}
         self.pending_plot: Optional[Tuple[int, int]] = None
         self.inventory_rect_modal = pygame.Rect(0, 0, 260, 200)
         self.inventory_close_rect = pygame.Rect(0, 0, 0, 0)
@@ -178,15 +179,16 @@ class GardenUI:
         if self.active_modal == "inventory":
             self.draw_inventory_modal()
 
-    def _build_menu_buttons(self) -> dict[str, pygame.Rect]:
+    def _build_menu_buttons(
+        self, entries: list[tuple[str, bool, str]]
+    ) -> dict[str, pygame.Rect]:
         buttons: dict[str, pygame.Rect] = {}
         start_x = self.menu_rect.x + 20
         start_y = self.menu_rect.y + 50
         width = self.menu_rect.width - 40
         height = 32
         gap = 12
-        order = ["red_rose", "white_lily", "eucalyptus", "cancel"]
-        for idx, key in enumerate(order):
+        for idx, (key, _enabled, _label) in enumerate(entries):
             y = start_y + idx * (height + gap)
             buttons[key] = pygame.Rect(start_x, y, width, height)
         return buttons
@@ -200,6 +202,10 @@ class GardenUI:
                     self.active_modal = None
                     self.pending_plot = None
                     self.state.message = "Cancelled"
+                    return True
+                entry = next((e for e in self.menu_entries if e[0] == key), None)
+                if entry and not entry[1]:
+                    self.state.message = "未解锁"
                     return True
                 if self.pending_plot:
                     row, col = self.pending_plot
@@ -226,9 +232,12 @@ class GardenUI:
             pygame.draw.rect(self.screen, self.tile_border, rect, width=2, border_radius=6)
             if key == "cancel":
                 label = "Cancel"
+                color = self.text_color
             else:
-                label = MENU_LABELS.get(key, key)
-            text = self.font_small.render(label, True, self.text_color)
+                entry = next((e for e in self.menu_entries if e[0] == key), None)
+                label = entry[2] if entry else MENU_LABELS.get(key, key)
+                color = self.text_color if entry is None or entry[1] else (120, 110, 100)
+            text = self.font_small.render(label, True, color)
             text_rect = text.get_rect(center=rect.center)
             self.screen.blit(text, text_rect)
 
@@ -325,6 +334,25 @@ class GardenUI:
         label_rect = label_text.get_rect(center=self.xp_bar_rect.center)
         self.screen.blit(label_text, label_rect)
 
+    def build_menu_entries(self) -> list[tuple[str, bool, str]]:
+        unlocks = self.state.flower_unlocks or {}
+        items = sorted(unlocks.items(), key=lambda kv: kv[1])
+        current = self.state.level
+        next_level = None
+        for _key, level in items:
+            if level > current:
+                next_level = level
+                break
+        entries: list[tuple[str, bool, str]] = []
+        for key, level in items:
+            if level <= current:
+                entries.append((key, True, MENU_LABELS.get(key, key)))
+            elif next_level is not None and level == next_level:
+                label = MENU_LABELS.get(key, key)
+                entries.append((key, False, f"{label} - Lv {level}"))
+        entries.append(("cancel", True, "Cancel"))
+        return entries
+
     def layout(self) -> None:
         self.content_rect = pygame.Rect(
             0, self.TOP_H, self.width, self.height - self.TOP_H - self.BOTTOM_H
@@ -369,7 +397,8 @@ class GardenUI:
             260,
             220,
         )
-        self.menu_buttons = self._build_menu_buttons()
+        self.menu_entries = self.build_menu_entries()
+        self.menu_buttons = self._build_menu_buttons(self.menu_entries)
 
         self.inventory_rect_modal = pygame.Rect(
             self.width // 2 - 130,

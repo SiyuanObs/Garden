@@ -42,10 +42,13 @@ class GameState:
     level: int = 1
     xp: int = 0
     level_xp: dict[int, int] = field(default_factory=dict)
+    flower_unlocks: dict[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.level_xp:
             self.level_xp = self._load_level_config()
+        if not self.flower_unlocks:
+            self.flower_unlocks = self._load_flower_unlocks()
 
     def _load_level_config(self) -> dict[int, int]:
         config_path = Path(__file__).resolve().parents[1] / "config" / "level_xp.json"
@@ -60,6 +63,23 @@ class GameState:
             except (ValueError, TypeError):
                 continue
         return level_xp
+
+    def _load_flower_unlocks(self) -> dict[str, int]:
+        config_path = (
+            Path(__file__).resolve().parents[1] / "config" / "flower_unlocks.json"
+        )
+        try:
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = {"red_rose": 1}
+        unlocks: dict[str, int] = {}
+        if isinstance(data, dict):
+            for key, value in data.items():
+                try:
+                    unlocks[str(key)] = int(value)
+                except (ValueError, TypeError):
+                    continue
+        return unlocks
 
     def xp_required(self) -> int | None:
         return self.level_xp.get(self.level)
