@@ -44,11 +44,12 @@ class GardenUI:
         self.grid_size = 3
         self.tile_size = 120
         self.grid_gap = 16
-        self.grid_top = 90
+        self.grid_top = 130
         self.grid_left = (self.width - (self.tile_size * self.grid_size + self.grid_gap * 2)) // 2
 
         self.inventory_rect = pygame.Rect(self.width - 140, 22, 110, 32)
         self.message_rect = pygame.Rect(24, self.height - 60, self.width - 48, 36)
+        self.xp_bar_rect = pygame.Rect(24, 56, self.width - 48, 18)
         self.active_modal: Optional[str] = None
         self.menu_rect = pygame.Rect(140, 160, 240, 220)
         self.menu_buttons = self._build_menu_buttons()
@@ -145,6 +146,10 @@ class GardenUI:
         inv_text = self.font.render("Inventory", True, self.text_color)
         inv_text_rect = inv_text.get_rect(center=self.inventory_rect.center)
         self.screen.blit(inv_text, inv_text_rect)
+
+        level_text = self.font.render(f"Level: {self.state.level}", True, self.text_color)
+        self.screen.blit(level_text, (24, 84))
+        self.draw_xp_bar()
 
         for row in range(self.grid_size):
             for col in range(self.grid_size):
@@ -287,6 +292,30 @@ class GardenUI:
         if plot.state == "ready":
             return plot.crop.name if plot.crop else "READY"
         return plot.state
+
+    def draw_xp_bar(self) -> None:
+        pygame.draw.rect(self.screen, self.panel_color, self.xp_bar_rect, border_radius=6)
+        pygame.draw.rect(self.screen, self.tile_border, self.xp_bar_rect, width=2, border_radius=6)
+
+        required = self.state.xp_required()
+        if required is None:
+            fill_width = self.xp_bar_rect.width
+            label = "MAX"
+        else:
+            ratio = 0 if required <= 0 else min(self.state.xp / required, 1.0)
+            fill_width = int(self.xp_bar_rect.width * ratio)
+            label = f"{self.state.xp}/{required}"
+
+        fill_rect = pygame.Rect(
+            self.xp_bar_rect.x,
+            self.xp_bar_rect.y,
+            fill_width,
+            self.xp_bar_rect.height,
+        )
+        pygame.draw.rect(self.screen, (196, 176, 154), fill_rect, border_radius=6)
+        label_text = self.font_small.render(label, True, self.text_color)
+        label_rect = label_text.get_rect(center=self.xp_bar_rect.center)
+        self.screen.blit(label_text, label_rect)
 
 
 def run_app(state: GameState) -> None:

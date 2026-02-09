@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
+from pathlib import Path
 
 
 FLOWER_TYPES: dict[str, str] = {
@@ -37,6 +39,43 @@ class GameState:
     )
     message: str = "Ready"
     water: int = 20
+    level: int = 1
+    xp: int = 0
+    level_xp: dict[int, int] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.level_xp:
+            self.level_xp = self._load_level_config()
+
+    def _load_level_config(self) -> dict[int, int]:
+        config_path = Path(__file__).resolve().parents[1] / "config" / "level_xp.json"
+        try:
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = {"1": 10}
+        level_xp: dict[int, int] = {}
+        for key, value in data.items():
+            try:
+                level_xp[int(key)] = int(value)
+            except (ValueError, TypeError):
+                continue
+        return level_xp
+
+    def xp_required(self) -> int | None:
+        return self.level_xp.get(self.level)
+
+    def gain_xp(self, amount: int) -> None:
+        if amount <= 0:
+            return
+        self.xp += amount
+        while True:
+            required = self.xp_required()
+            if required is None:
+                break
+            if self.xp < required:
+                break
+            self.xp -= required
+            self.level += 1
 
     def _set_message(self, text: str) -> None:
         self.message = text
@@ -68,6 +107,7 @@ class GameState:
         if plot.state == "ready":
             if plot.crop:
                 self.inventory[plot.crop.key] = self.inventory.get(plot.crop.key, 0) + 1
+                self.gain_xp(1)
             plot.state = "empty"
             plot.crop = None
             self._set_message("Harvested")
