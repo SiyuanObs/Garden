@@ -69,9 +69,12 @@ class GardenUI:
         self.menu_entries: list[tuple[str, bool, str]] = []
         self.menu_buttons: dict[str, pygame.Rect] = {}
         self.pending_plot: Optional[Tuple[int, int]] = None
+        self.pending_batch: bool = False
         self.inventory_rect_modal = pygame.Rect(0, 0, 260, 200)
         self.inventory_close_rect = pygame.Rect(0, 0, 0, 0)
         self.order_buttons: list[pygame.Rect] = []
+        self.batch_toggle_rect = pygame.Rect(0, 0, 18, 18)
+        self.batch_mode = False
 
         self.layout()
 
@@ -128,6 +131,10 @@ class GardenUI:
             self.pending_plot = None
             self.active_modal = "inventory"
             return
+        if self.batch_toggle_rect.collidepoint(pos) and self.state.unlocked_plot_count() >= 2:
+            self.batch_mode = not self.batch_mode
+            self.state.message = "Batch mode ON" if self.batch_mode else "Batch mode OFF"
+            return
         if self.water_plus_rect.collidepoint(pos):
             self.state.buy_water()
             return
@@ -146,8 +153,17 @@ class GardenUI:
         if plot.state == "empty":
             self.active_modal = "plant_menu"
             self.pending_plot = (row, col)
+            self.pending_batch = self.batch_mode
             return
-        self.state.click_plot(row, col)
+        if self.batch_mode:
+            if plot.state == "planted":
+                self.state.batch_water()
+            elif plot.state == "ready":
+                self.state.batch_harvest()
+            else:
+                self.state.click_plot(row, col)
+        else:
+            self.state.click_plot(row, col)
 
     def get_plot_at_pos(self, pos: Tuple[int, int]) -> Optional[Tuple[int, int]]:
         x, y = pos
@@ -180,6 +196,9 @@ class GardenUI:
         plus_text = self.font_small.render("+", True, self.text_color)
         plus_rect = plus_text.get_rect(center=self.water_plus_rect.center)
         self.screen.blit(plus_text, plus_rect)
+
+        if self.state.unlocked_plot_count() >= 2:
+            self.draw_batch_toggle()
 
         pygame.draw.rect(self.screen, self.panel_color, self.inventory_rect, border_radius=6)
         inv_text = self.font.render("Inventory", True, self.text_color)
@@ -229,17 +248,21 @@ class GardenUI:
                 if key == "cancel":
                     self.active_modal = None
                     self.pending_plot = None
+                    self.pending_batch = False
                     self.state.message = "Cancelled"
                     return True
                 entry = next((e for e in self.menu_entries if e[0] == key), None)
                 if entry and not entry[1]:
                     self.state.message = "未解锁"
                     return True
-                if self.pending_plot:
+                if self.pending_batch:
+                    self.state.batch_plant(key)
+                elif self.pending_plot:
                     row, col = self.pending_plot
                     self.state.plant_flower(row, col, key)
                 self.active_modal = None
                 self.pending_plot = None
+                self.pending_batch = False
                 return True
         return True
 
@@ -566,6 +589,15 @@ class GardenUI:
             text_color,
         )
 
+    def draw_batch_toggle(self) -> None:
+        pygame.draw.rect(self.screen, self.panel_color, self.batch_toggle_rect, border_radius=3)
+        pygame.draw.rect(self.screen, self.tile_border, self.batch_toggle_rect, width=1, border_radius=3)
+        if self.batch_mode:
+            inner = self.batch_toggle_rect.inflate(-6, -6)
+            pygame.draw.rect(self.screen, (96, 82, 69), inner, border_radius=2)
+        label = self.font_small.render("Batch Mode", True, self.text_color)
+        self.screen.blit(label, (self.batch_toggle_rect.right + 6, self.batch_toggle_rect.y - 1))
+
     def is_chest_plot(self, row: int, col: int) -> bool:
         return row == 2 and col == 2
 
@@ -622,6 +654,12 @@ class GardenUI:
             self.PADDING + 6,
             110,
             32,
+        )
+        self.batch_toggle_rect = pygame.Rect(
+            self.inventory_rect.x,
+            self.inventory_rect.bottom + 8,
+            18,
+            18,
         )
         self.water_plus_rect = pygame.Rect(
             self.PADDING,

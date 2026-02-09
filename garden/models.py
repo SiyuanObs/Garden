@@ -155,6 +155,14 @@ class GameState:
         unlocks = self.flower_unlocks or {}
         return [key for key, level in unlocks.items() if self.level >= level]
 
+    def unlocked_plot_count(self) -> int:
+        count = 0
+        for row in self.plots:
+            for plot in row:
+                if plot.unlocked:
+                    count += 1
+        return count
+
     def is_adjacent_to_unlocked(self, row: int, col: int) -> bool:
         neighbors = [(row - 1, col), (row + 1, col), (row, col - 1), (row, col + 1)]
         for r, c in neighbors:
@@ -185,6 +193,70 @@ class GameState:
         self.coins -= 3
         self.water += 1
         self._set_message("Bought 1 water (-3 coins)")
+
+    def batch_plant(self, flower_key: str) -> int:
+        name = FLOWER_TYPES.get(flower_key, "Red Rose")
+        count = 0
+        for r in range(3):
+            for c in range(3):
+                plot = self.plots[r][c]
+                if plot.unlocked and plot.state == "empty":
+                    plot.state = "planted"
+                    plot.crop = CropType(key=flower_key, name=name)
+                    count += 1
+        self._set_message(f"Planted {name} x{count}")
+        return count
+
+    def batch_water(self) -> int:
+        if self.water <= 0:
+            self._set_message("Not enough water")
+            return 0
+        planted: list[Plot] = []
+        for r in range(3):
+            for c in range(3):
+                plot = self.plots[r][c]
+                if plot.unlocked and plot.state == "planted":
+                    planted.append(plot)
+        total = len(planted)
+        if total == 0:
+            self._set_message("No planted plots")
+            return 0
+        can_water = min(self.water, total)
+        for idx in range(can_water):
+            plot = planted[idx]
+            plot.state = "ready"
+            self.water -= 1
+        if can_water < total:
+            self._set_message(
+                f"Watered {can_water}/{total}, water left {self.water}"
+            )
+        else:
+            self._set_message(f"Watered {can_water}, water left {self.water}")
+        return can_water
+
+    def batch_harvest(self) -> int:
+        harvested: dict[str, int] = {}
+        total = 0
+        for r in range(3):
+            for c in range(3):
+                plot = self.plots[r][c]
+                if plot.unlocked and plot.state == "ready" and plot.crop:
+                    key = plot.crop.key
+                    harvested[key] = harvested.get(key, 0) + 1
+                    total += 1
+                    plot.state = "empty"
+                    plot.crop = None
+        for key, qty in harvested.items():
+            self.inventory[key] = self.inventory.get(key, 0) + qty
+        if total > 0:
+            self.gain_xp(total)
+        if total == 0:
+            self._set_message("No ready plots")
+            return 0
+        parts = [f"{FLOWER_TYPES.get(k, k)} x{v}" for k, v in harvested.items()]
+        summary = ", ".join(parts)
+        self._set_message(f"Harvested {total}: {summary}")
+        return total
 
     def update_orders(self, dt: float) -> None:
         if dt <= 0:
