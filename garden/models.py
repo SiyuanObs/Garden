@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -31,18 +32,18 @@ class GameState:
         if plot.state == "empty":
             plot.state = "planted"
             plot.crop = CropType(name="红玫瑰")
-            self._set_message("种下红玫瑰。")
+            self._set_message("种下红玫瑰")
             return
         if plot.state == "planted":
             if self.water <= 0:
-                self._set_message("水不足。")
+                self._set_message("水不足")
                 return
             self.water -= 1
             plot.state = "ready"
-            self._set_message("浇水完成，红玫瑰可收获。")
+            self._set_message("浇水完成，红玫瑰可收获")
             return
         if plot.state == "ready":
             self.inventory["红玫瑰"] = self.inventory.get("红玫瑰", 0) + 1
             plot.state = "empty"
             plot.crop = None
-            self._set_message("收获红玫瑰。")
+            self._set_message("收获红玫瑰")

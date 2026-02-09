@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from garden.models import GameState
 from garden.ui import run_app
 
