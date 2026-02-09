@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 
 import pygame
 
-from garden.models import FLOWER_LABELS, FLOWER_TYPES, GameState
+from garden.models import FLOWER_TYPES, GameState
 
 
 STATE_LABELS = {
@@ -25,8 +25,8 @@ class GardenUI:
         pygame.init()
         pygame.display.set_caption("Garden MVP")
 
-        self.width = 520
-        self.height = 560
+        self.width = 640
+        self.height = 680
         self.screen = pygame.display.set_mode((self.width, self.height))
         self.clock = pygame.time.Clock()
 
@@ -42,25 +42,30 @@ class GardenUI:
         self.font_bold = self._load_font(20, bold=True)
 
         self.grid_size = 3
-        self.tile_size = 120
-        self.grid_gap = 16
-        self.grid_top = 130
-        self.grid_left = (self.width - (self.tile_size * self.grid_size + self.grid_gap * 2)) // 2
+        self.PADDING = 24
+        self.GAP = 14
+        self.TOP_H = 80
+        self.BOTTOM_H = 44
+        self.XP_BAR_W = 320
+        self.XP_BAR_H = 16
 
-        self.inventory_rect = pygame.Rect(self.width - 140, 22, 110, 32)
-        self.message_rect = pygame.Rect(24, self.height - 60, self.width - 48, 36)
-        self.xp_bar_rect = pygame.Rect(24, 56, self.width - 48, 18)
+        self.tile_size = 120
+        self.grid_gap = self.GAP
+        self.grid_top = 0
+        self.grid_left = 0
+
+        self.inventory_rect = pygame.Rect(0, 0, 110, 32)
+        self.message_rect = pygame.Rect(0, 0, 0, 0)
+        self.xp_bar_rect = pygame.Rect(0, 0, self.XP_BAR_W, self.XP_BAR_H)
+        self.content_rect = pygame.Rect(0, 0, 0, 0)
         self.active_modal: Optional[str] = None
-        self.menu_rect = pygame.Rect(140, 160, 240, 220)
+        self.menu_rect = pygame.Rect(0, 0, 260, 220)
         self.menu_buttons = self._build_menu_buttons()
         self.pending_plot: Optional[Tuple[int, int]] = None
-        self.inventory_rect_modal = pygame.Rect(140, 160, 240, 200)
-        self.inventory_close_rect = pygame.Rect(
-            self.inventory_rect_modal.x + 60,
-            self.inventory_rect_modal.y + 140,
-            self.inventory_rect_modal.width - 120,
-            32,
-        )
+        self.inventory_rect_modal = pygame.Rect(0, 0, 260, 200)
+        self.inventory_close_rect = pygame.Rect(0, 0, 0, 0)
+
+        self.layout()
 
     def run(self) -> None:
         running = True
@@ -139,8 +144,10 @@ class GardenUI:
     def draw(self) -> None:
         self.screen.fill(self.bg_color)
 
+        self.layout()
+
         water_text = self.font_bold.render(f"water: {self.state.water}", True, self.text_color)
-        self.screen.blit(water_text, (24, 26))
+        self.screen.blit(water_text, (self.PADDING, self.PADDING + 10))
 
         pygame.draw.rect(self.screen, self.panel_color, self.inventory_rect, border_radius=6)
         inv_text = self.font.render("Inventory", True, self.text_color)
@@ -148,7 +155,8 @@ class GardenUI:
         self.screen.blit(inv_text, inv_text_rect)
 
         level_text = self.font.render(f"Level: {self.state.level}", True, self.text_color)
-        self.screen.blit(level_text, (24, 84))
+        level_rect = level_text.get_rect(center=(self.width // 2, self.PADDING + 14))
+        self.screen.blit(level_text, level_rect)
         self.draw_xp_bar()
 
         for row in range(self.grid_size):
@@ -316,6 +324,65 @@ class GardenUI:
         label_text = self.font_small.render(label, True, self.text_color)
         label_rect = label_text.get_rect(center=self.xp_bar_rect.center)
         self.screen.blit(label_text, label_rect)
+
+    def layout(self) -> None:
+        self.content_rect = pygame.Rect(
+            0, self.TOP_H, self.width, self.height - self.TOP_H - self.BOTTOM_H
+        )
+
+        self.message_rect = pygame.Rect(
+            self.PADDING,
+            self.height - self.BOTTOM_H + 6,
+            self.width - self.PADDING * 2,
+            self.BOTTOM_H - 12,
+        )
+
+        self.inventory_rect = pygame.Rect(
+            self.width - self.PADDING - 110,
+            self.PADDING + 6,
+            110,
+            32,
+        )
+
+        self.xp_bar_rect = pygame.Rect(
+            self.width // 2 - self.XP_BAR_W // 2,
+            self.PADDING + 38,
+            self.XP_BAR_W,
+            self.XP_BAR_H,
+        )
+
+        avail_w = self.content_rect.width - self.PADDING * 2
+        avail_h = self.content_rect.height - self.PADDING * 2
+        total_gap = self.grid_gap * (self.grid_size - 1)
+        size_by_w = (avail_w - total_gap) // self.grid_size
+        size_by_h = (avail_h - total_gap) // self.grid_size
+        self.tile_size = max(60, min(size_by_w, size_by_h))
+
+        grid_w = self.tile_size * self.grid_size + total_gap
+        grid_h = self.tile_size * self.grid_size + total_gap
+        self.grid_left = self.content_rect.x + (self.content_rect.width - grid_w) // 2
+        self.grid_top = self.content_rect.y + (self.content_rect.height - grid_h) // 2
+
+        self.menu_rect = pygame.Rect(
+            self.width // 2 - 130,
+            self.content_rect.y + (self.content_rect.height - 220) // 2,
+            260,
+            220,
+        )
+        self.menu_buttons = self._build_menu_buttons()
+
+        self.inventory_rect_modal = pygame.Rect(
+            self.width // 2 - 130,
+            self.content_rect.y + (self.content_rect.height - 200) // 2,
+            260,
+            200,
+        )
+        self.inventory_close_rect = pygame.Rect(
+            self.inventory_rect_modal.x + 60,
+            self.inventory_rect_modal.y + 140,
+            self.inventory_rect_modal.width - 120,
+            32,
+        )
 
 
 def run_app(state: GameState) -> None:
