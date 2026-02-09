@@ -62,6 +62,7 @@ class GardenUI:
         self.content_rect = pygame.Rect(0, 0, 0, 0)
         self.side_rect = pygame.Rect(0, 0, 0, 0)
         self.grid_rect = pygame.Rect(0, 0, 0, 0)
+        self.water_plus_rect = pygame.Rect(0, 0, 18, 18)
         self.active_modal: Optional[str] = None
         self.menu_rect = pygame.Rect(0, 0, 260, 220)
         self.menu_entries: list[tuple[str, bool, str]] = []
@@ -119,6 +120,9 @@ class GardenUI:
             self.pending_plot = None
             self.active_modal = "inventory"
             return
+        if self.water_plus_rect.collidepoint(pos):
+            self.state.buy_water()
+            return
         if self.side_rect.collidepoint(pos):
             if self.handle_order_click(pos):
                 return
@@ -128,6 +132,9 @@ class GardenUI:
             return
         row, col = row_col
         plot = self.state.plots[row][col]
+        if not plot.unlocked:
+            self.state.try_unlock_plot(row, col)
+            return
         if plot.state == "empty":
             self.active_modal = "plant_menu"
             self.pending_plot = (row, col)
@@ -160,6 +167,11 @@ class GardenUI:
         self.screen.blit(water_text, (self.PADDING, self.PADDING + 10))
         coins_text = self.font.render(f"coins: {self.state.coins}", True, self.text_color)
         self.screen.blit(coins_text, (self.PADDING + 140, self.PADDING + 12))
+        pygame.draw.rect(self.screen, self.panel_color, self.water_plus_rect, border_radius=4)
+        pygame.draw.rect(self.screen, self.tile_border, self.water_plus_rect, width=1, border_radius=4)
+        plus_text = self.font_small.render("+", True, self.text_color)
+        plus_rect = plus_text.get_rect(center=self.water_plus_rect.center)
+        self.screen.blit(plus_text, plus_rect)
 
         pygame.draw.rect(self.screen, self.panel_color, self.inventory_rect, border_radius=6)
         inv_text = self.font.render("Inventory", True, self.text_color)
@@ -176,13 +188,23 @@ class GardenUI:
         for row in range(self.grid_size):
             for col in range(self.grid_size):
                 rect = self.get_plot_rect(row, col)
-                pygame.draw.rect(self.screen, self.tile_color, rect, border_radius=8)
-                pygame.draw.rect(self.screen, self.tile_border, rect, width=2, border_radius=8)
                 plot = self.state.plots[row][col]
-                label = self.get_plot_label(plot)
-                label_text = self.font.render(label, True, self.accent_color)
-                label_rect = label_text.get_rect(center=rect.center)
-                self.screen.blit(label_text, label_rect)
+                base_color = self.tile_color
+                border_color = self.tile_border
+                if self.is_chest_plot(row, col):
+                    base_color = (245, 226, 175)
+                    border_color = (184, 142, 63)
+                pygame.draw.rect(self.screen, base_color, rect, border_radius=8)
+                pygame.draw.rect(self.screen, border_color, rect, width=2, border_radius=8)
+                label = self.get_plot_label(plot, row, col)
+                self.draw_wrapped_text(
+                    self.screen,
+                    label,
+                    pygame.Rect(rect.x + 6, rect.y + 6, rect.width - 12, rect.height - 12),
+                    self.font_tiny,
+                    16,
+                    self.accent_color,
+                )
 
         pygame.draw.rect(self.screen, self.panel_color, self.message_rect, border_radius=6)
         self.draw_message_lines(self.state.message)
@@ -313,15 +335,24 @@ class GardenUI:
             text = self.font_small.render(line, True, self.text_color)
             self.screen.blit(text, (self.message_rect.x + 10, start_y + idx * 14))
 
-    def get_plot_label(self, plot) -> str:
+    def get_plot_label(self, plot, row: int, col: int) -> str:
+        if not plot.unlocked:
+            cost = plot.unlock_cost
+            if self.is_chest_plot(row, col):
+                return f"LOCKED {cost} CHEST"
+            return f"LOCKED {cost}"
         if plot.state == "empty":
-            return "EMPTY"
-        if plot.state == "planted":
+            label = "EMPTY"
+        elif plot.state == "planted":
             name = plot.crop.name if plot.crop else "-"
-            return f"PLANTED - {name}"
-        if plot.state == "ready":
-            return plot.crop.name if plot.crop else "READY"
-        return plot.state
+            label = f"PLANTED - {name}"
+        elif plot.state == "ready":
+            label = plot.crop.name if plot.crop else "READY"
+        else:
+            label = plot.state
+        if self.is_chest_plot(row, col):
+            return f"CHEST - {label}"
+        return label
 
     def draw_xp_bar(self) -> None:
         pygame.draw.rect(self.screen, self.panel_color, self.xp_bar_rect, border_radius=6)
@@ -495,6 +526,9 @@ class GardenUI:
             surface.blit(font.render(line, True, color), (rect.x, rect.y + idx * line_height))
         return rect.y + max_lines * line_height
 
+    def is_chest_plot(self, row: int, col: int) -> bool:
+        return row == 2 and col == 2
+
     def handle_order_click(self, pos: Tuple[int, int]) -> bool:
         if not self.order_buttons:
             return False
@@ -539,6 +573,12 @@ class GardenUI:
             self.PADDING + 6,
             110,
             32,
+        )
+        self.water_plus_rect = pygame.Rect(
+            self.PADDING,
+            self.PADDING + 38,
+            18,
+            18,
         )
 
         self.xp_bar_rect = pygame.Rect(

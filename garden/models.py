@@ -30,6 +30,8 @@ class CropType:
 class Plot:
     state: str = "empty"  # "empty" | "planted" | "ready"
     crop: CropType | None = None
+    unlocked: bool = False
+    unlock_cost: int = 0
 
 
 @dataclass
@@ -50,6 +52,7 @@ class GameState:
     order_timer: float = 10.0
     max_orders: int = 3
     order_interval: float = 10.0
+    plot_unlock_costs: list[list[int]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.level_xp:
@@ -58,6 +61,9 @@ class GameState:
             self.flower_unlocks = self._load_flower_unlocks()
         if not self.flower_values:
             self.flower_values = self._load_flower_values()
+        if not self.plot_unlock_costs:
+            self.plot_unlock_costs = self._load_plot_unlock_costs()
+        self._apply_plot_unlocks()
         if not self.orders:
             self.generate_order()
 
@@ -109,9 +115,76 @@ class GameState:
                     continue
         return values
 
+    def _load_plot_unlock_costs(self) -> list[list[int]]:
+        config_path = (
+            Path(__file__).resolve().parents[1] / "config" / "plot_unlock_costs.json"
+        )
+        default = [
+            [0, 20, 100],
+            [20, 50, 300],
+            [100, 300, 1000],
+        ]
+        try:
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return default
+        if not isinstance(data, list) or len(data) != 3:
+            return default
+        costs: list[list[int]] = []
+        for row in data:
+            if not isinstance(row, list) or len(row) != 3:
+                return default
+            parsed_row: list[int] = []
+            for value in row:
+                try:
+                    parsed_row.append(int(value))
+                except (ValueError, TypeError):
+                    parsed_row.append(0)
+            costs.append(parsed_row)
+        return costs
+
+    def _apply_plot_unlocks(self) -> None:
+        for r in range(3):
+            for c in range(3):
+                plot = self.plots[r][c]
+                cost = self.plot_unlock_costs[r][c]
+                plot.unlock_cost = cost
+                plot.unlocked = (r == 0 and c == 0)
+
     def unlocked_flowers(self) -> list[str]:
         unlocks = self.flower_unlocks or {}
         return [key for key, level in unlocks.items() if self.level >= level]
+
+    def is_adjacent_to_unlocked(self, row: int, col: int) -> bool:
+        neighbors = [(row - 1, col), (row + 1, col), (row, col - 1), (row, col + 1)]
+        for r, c in neighbors:
+            if 0 <= r < 3 and 0 <= c < 3:
+                if self.plots[r][c].unlocked:
+                    return True
+        return False
+
+    def try_unlock_plot(self, row: int, col: int) -> None:
+        plot = self.plots[row][col]
+        if plot.unlocked:
+            return
+        if not self.is_adjacent_to_unlocked(row, col):
+            self._set_message("Must unlock adjacent plots first")
+            return
+        cost = plot.unlock_cost
+        if self.coins < cost:
+            self._set_message(f"Need {cost} coins")
+            return
+        self.coins -= cost
+        plot.unlocked = True
+        self._set_message(f"Unlocked ({row + 1},{col + 1}) -{cost} coins")
+
+    def buy_water(self) -> None:
+        if self.coins < 3:
+            self._set_message("Not enough coins")
+            return
+        self.coins -= 3
+        self.water += 1
+        self._set_message("Bought 1 water (-3 coins)")
 
     def update_orders(self, dt: float) -> None:
         if dt <= 0:
@@ -215,6 +288,8 @@ class GameState:
 
     def click_plot(self, row: int, col: int) -> None:
         plot = self.plots[row][col]
+        if not plot.unlocked:
+            return
         if plot.state == "empty":
             return
         if plot.state == "planted":
