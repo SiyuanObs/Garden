@@ -291,9 +291,9 @@ class GameState:
             reward += self.flower_values.get(key, 0) * qty
         self.orders.append(Order(requirements=requirements, reward=reward))
 
-    def deliver_order(self, index: int) -> None:
+    def deliver_order(self, index: int) -> int:
         if index < 0 or index >= len(self.orders):
-            return
+            return 0
         order = self.orders[index]
         if not self.can_fulfill(order):
             missing = self.missing_for(order)
@@ -301,14 +301,15 @@ class GameState:
                 self._set_message(f"缺少: {', '.join(missing)}")
             else:
                 self._set_message("Not enough flowers")
-            return
+            return 0
         for key, qty in order.requirements.items():
             self.inventory[key] = self.inventory.get(key, 0) - qty
-        reward = self.order_value(order)
+        reward = order.reward
         self.coins += reward
         self.orders.pop(index)
         self.order_timer = self.order_interval
         self._set_message(f"Delivered +{reward} coins")
+        return reward
 
     def can_fulfill(self, order: "Order") -> bool:
         for key, qty in order.requirements.items():

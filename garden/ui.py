@@ -73,6 +73,9 @@ class GardenUI:
         self.inventory_rect_modal = pygame.Rect(0, 0, 260, 200)
         self.inventory_close_rect = pygame.Rect(0, 0, 0, 0)
         self.order_buttons: list[pygame.Rect] = []
+        self.order_cards: list[pygame.Rect] = []
+        self.coin_animations: list[CoinFlyAnimation] = []
+        self.coins_target: Tuple[int, int] = (0, 0)
         self.batch_toggle_rect = pygame.Rect(0, 0, 18, 18)
         self.batch_mode = False
 
@@ -83,6 +86,7 @@ class GardenUI:
         while running:
             dt = self.clock.tick(60) / 1000.0
             self.state.update_orders(dt)
+            self.update_animations(dt)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -190,7 +194,12 @@ class GardenUI:
         water_text = self.font_bold.render(f"water: {self.state.water}", True, self.text_color)
         self.screen.blit(water_text, (self.PADDING, self.PADDING + 10))
         coins_text = self.font.render(f"coins: {self.state.coins}", True, self.text_color)
-        self.screen.blit(coins_text, (self.PADDING + 140, self.PADDING + 12))
+        coins_pos = (self.PADDING + 140, self.PADDING + 12)
+        self.screen.blit(coins_text, coins_pos)
+        self.coins_target = (
+            coins_pos[0] + coins_text.get_width() - 6,
+            coins_pos[1] + coins_text.get_height() // 2,
+        )
         pygame.draw.rect(self.screen, self.panel_color, self.water_plus_rect, border_radius=4)
         pygame.draw.rect(self.screen, self.tile_border, self.water_plus_rect, width=1, border_radius=4)
         plus_text = self.font_small.render("+", True, self.text_color)
@@ -225,6 +234,7 @@ class GardenUI:
             self.draw_menu()
         if self.active_modal == "inventory":
             self.draw_inventory_modal()
+        self.draw_coin_animations()
 
     def _build_menu_buttons(
         self, entries: list[tuple[str, bool, str]]
@@ -430,6 +440,7 @@ class GardenUI:
         self.screen.blit(timer, (self.side_rect.x + 12, self.side_rect.y + 34))
 
         self.order_buttons = []
+        self.order_cards = []
         y = self.side_rect.y + 58
         for idx, order in enumerate(self.state.orders[: self.state.max_orders]):
             card_rect = pygame.Rect(
@@ -465,6 +476,7 @@ class GardenUI:
             label_rect = label.get_rect(center=deliver_rect.center)
             self.screen.blit(label, label_rect)
             self.order_buttons.append(deliver_rect)
+            self.order_cards.append(card_rect)
 
             y += 140
 
@@ -544,6 +556,34 @@ class GardenUI:
             surface.blit(font.render(line, True, color), (rect.x, rect.y + idx * line_height))
         return rect.y + max_lines * line_height
 
+    def spawn_coin_animation(self, card_rect: pygame.Rect) -> None:
+        start = (card_rect.right - 18, card_rect.y + 16)
+        end = self.coins_target
+        self.coin_animations.append(CoinFlyAnimation(start, end, 0.8))
+
+    def update_animations(self, dt: float) -> None:
+        if not self.coin_animations:
+            return
+        remaining: list[CoinFlyAnimation] = []
+        for anim in self.coin_animations:
+            anim.elapsed += dt
+            if anim.elapsed < anim.duration:
+                remaining.append(anim)
+        self.coin_animations = remaining
+
+    def draw_coin_animations(self) -> None:
+        for anim in self.coin_animations:
+            t = min(1.0, anim.elapsed / anim.duration)
+            ease = 1.0 - (1.0 - t) * (1.0 - t)
+            x = anim.start[0] + (anim.end[0] - anim.start[0]) * ease
+            y = anim.start[1] + (anim.end[1] - anim.start[1]) * ease
+            self.draw_coin((int(x), int(y)))
+
+    def draw_coin(self, pos: Tuple[int, int]) -> None:
+        pygame.draw.circle(self.screen, (242, 205, 83), pos, 7)
+        pygame.draw.circle(self.screen, (210, 168, 52), pos, 7, 2)
+        pygame.draw.circle(self.screen, (255, 235, 160), (pos[0] - 2, pos[1] - 2), 2)
+
     def draw_plot(self, plot, row: int, col: int, rect: pygame.Rect) -> None:
         is_chest = self.is_chest_plot(row, col)
         is_unlocked = plot.unlocked
@@ -615,10 +655,10 @@ class GardenUI:
             return False
         for idx, rect in enumerate(self.order_buttons):
             if rect.collidepoint(pos):
-                if idx < len(self.state.orders) and self.state.can_fulfill(
-                    self.state.orders[idx]
-                ):
-                    self.state.deliver_order(idx)
+                if idx < len(self.state.orders) and self.state.can_fulfill(self.state.orders[idx]):
+                    reward = self.state.deliver_order(idx)
+                    if reward > 0 and idx < len(self.order_cards):
+                        self.spawn_coin_animation(self.order_cards[idx])
                 else:
                     self.state.message = "Not enough flowers"
                 return True
@@ -713,3 +753,11 @@ class GardenUI:
 def run_app(state: GameState) -> None:
     ui = GardenUI(state)
     ui.run()
+
+
+class CoinFlyAnimation:
+    def __init__(self, start: Tuple[int, int], end: Tuple[int, int], duration: float) -> None:
+        self.start = start
+        self.end = end
+        self.duration = duration
+        self.elapsed = 0.0
