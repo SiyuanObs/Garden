@@ -1,0 +1,15 @@
+{"location":"app.js:deliverClick","message":"Deliver clicked","data":{"idx":0,"ordersLen":2,"orderReqs":{"red_rose":5},"canFulfill":true,"inventory":"{\"red_rose\":5}"},"timestamp":1770715854032,"hypothesisId":"H1_H2_H3"}
+{"location":"game.js:deliverOrder","message":"deliverOrder entry","data":{"index":0,"ordersLen":2,"canFulfill":true,"reqKeys":["red_rose"]},"timestamp":1770715854039,"hypothesisId":"H2_H3"}
+{"location":"app.js:afterDeliver","message":"After deliverOrder","data":{"idx":0,"reward":15,"ordersLenAfter":1},"timestamp":1770715854040,"hypothesisId":"H3_H4"}
+{"location":"app.js:deliverClick","message":"Deliver clicked","data":{"idx":0,"ordersLen":2,"orderReqs":{"red_rose":3},"canFulfill":true,"inventory":"{\"red_rose\":5}"},"timestamp":1770715871248,"hypothesisId":"H1_H2_H3"}
+{"location":"game.js:deliverOrder","message":"deliverOrder entry","data":{"index":0,"ordersLen":2,"canFulfill":true,"reqKeys":["red_rose"]},"timestamp":1770715871249,"hypothesisId":"H2_H3"}
+{"location":"app.js:afterDeliver","message":"After deliverOrder","data":{"idx":0,"reward":9,"ordersLenAfter":1},"timestamp":1770715871249,"hypothesisId":"H3_H4"}
+{"location":"app.js:deliverClick","message":"Deliver clicked","data":{"idx":0,"ordersLen":2,"orderReqs":{"red_rose":3},"canFulfill":true,"inventory":"{\"red_rose\":5}"},"timestamp":1770715882498,"hypothesisId":"H1_H2_H3"}
+{"location":"game.js:deliverOrder","message":"deliverOrder entry","data":{"index":0,"ordersLen":2,"canFulfill":true,"reqKeys":["red_rose"]},"timestamp":1770715882499,"hypothesisId":"H2_H3"}
+{"location":"app.js:afterDeliver","message":"After deliverOrder","data":{"idx":0,"reward":9,"ordersLenAfter":1},"timestamp":1770715882500,"hypothesisId":"H3_H4"}
+{"location":"app.js:deliverClick","message":"Deliver clicked","data":{"idx":0,"ordersLen":2,"orderReqs":{"white_lily":4},"canFulfill":true,"inventory":"{\"red_rose\":2,\"white_lily\":4}"},"timestamp":1770715892831,"hypothesisId":"H1_H2_H3"}
+{"location":"game.js:deliverOrder","message":"deliverOrder entry","data":{"index":0,"ordersLen":2,"canFulfill":true,"reqKeys":["white_lily"]},"timestamp":1770715892832,"hypothesisId":"H2_H3"}
+{"location":"app.js:afterDeliver","message":"After deliverOrder","data":{"idx":0,"reward":20,"ordersLenAfter":1},"timestamp":1770715892832,"hypothesisId":"H3_H4"}
+{"location":"app.js:deliverClick","message":"Deliver clicked","data":{"idx":0,"ordersLen":1,"orderReqs":{"white_lily":3},"canFulfill":true,"inventory":"{\"red_rose\":2,\"white_lily\":4}"},"timestamp":1770715901898,"hypothesisId":"H1_H2_H3"}
+{"location":"game.js:deliverOrder","message":"deliverOrder entry","data":{"index":0,"ordersLen":1,"canFulfill":true,"reqKeys":["white_lily"]},"timestamp":1770715901899,"hypothesisId":"H2_H3"}
+{"location":"app.js:afterDeliver","message":"After deliverOrder","data":{"idx":0,"reward":15,"ordersLenAfter":0},"timestamp":1770715901900,"hypothesisId":"H3_H4"}

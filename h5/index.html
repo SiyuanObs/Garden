@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>🌸 小花园 · Garden</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/game.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <div class="stat" id="stat-water">
+        <span class="icon">💧</span>
+        <span id="water-num">20</span>
+      </div>
+      <button type="button" class="btn-icon" id="btn-buy-water" title="购买水">➕</button>
+      <button type="button" class="btn-rescue" id="btn-rescue" title="防卡死：+20 水">防卡死</button>
+      <div class="stat" id="stat-coins">
+        <span class="icon">🪙</span>
+        <span id="coins-num">0</span>
+      </div>
+      <div class="level-wrap">
+        <span class="level-num" id="level-num">Lv.1</span>
+        <div class="xp-bar-wrap">
+          <div class="xp-bar-fill" id="xp-fill" style="width: 0%"></div>
+        </div>
+        <span class="xp-bar-text" id="xp-text">0/10</span>
+      </div>
+      <button type="button" class="btn-icon" id="btn-inventory" title="背包">📦</button>
+    </div>
+    <span class="game-title">🌸 小花园</span>
+  </header>
+
+  <div class="main">
+    <section class="grid-wrap">
+      <div class="grid-title">点击空地种花 · 点击已种浇水/收获</div>
+      <div class="batch-wrap" id="batch-wrap">
+        <button type="button" class="batch-toggle" id="batch-toggle" aria-label="批量模式"></button>
+        <span class="batch-label" id="batch-label">批量模式</span>
+      </div>
+      <div class="plots" id="plots"></div>
+    </section>
+
+    <aside class="orders-panel">
+      <h3>📋 订单</h3>
+      <div class="order-timer" id="order-timer">下一单: 10s</div>
+      <div id="order-cards"></div>
+    </aside>
+  </div>
+
+  <div class="message-bar" id="message-bar">Ready</div>
+
+  <!-- 种花选择弹窗 -->
+  <div class="modal-overlay" id="modal-plant">
+    <div class="modal">
+      <h2>选一朵花种下</h2>
+      <ul class="menu-list" id="plant-menu"></ul>
+    </div>
+  </div>
+
+  <!-- 背包弹窗 -->
+  <div class="modal-overlay" id="modal-inventory">
+    <div class="modal">
+      <h2>📦 背包</h2>
+      <ul class="inv-list" id="inv-list"></ul>
+      <button type="button" class="modal-close" id="btn-close-inv">关闭</button>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
