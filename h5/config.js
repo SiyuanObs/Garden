@@ -4,7 +4,7 @@
 const CONFIG = {
   level_xp: { 1: 10, 2: 50 },
   flower_unlocks: { red_rose: 1, white_lily: 2, eucalyptus: 3 },
-  flower_values: { red_rose: 3, white_lily: 5, eucalyptus: 7 },
+  flower_values: { red_rose: 4, white_lily: 6, eucalyptus: 8 },
   plot_unlock_costs: [
     [0, 20, 100],
     [20, 50, 300],
