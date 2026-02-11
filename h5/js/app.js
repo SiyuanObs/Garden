@@ -60,6 +60,15 @@
           cell.appendChild(badge);
         }
 
+        // (3,3) 宝箱目标图标（1-based 即 r=2,c=2）
+        if (r === 2 && c === 2) {
+          const chest = document.createElement("span");
+          chest.className = "plot-treasure";
+          chest.setAttribute("aria-label", "目标宝箱");
+          chest.textContent = "🎁";
+          cell.appendChild(chest);
+        }
+
         const emoji = getPlotEmoji(plot);
         if (emoji) {
           const span = document.createElement("span");
